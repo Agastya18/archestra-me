@@ -13,6 +13,7 @@ import toolAggregator from '@backend/llms/toolAggregator';
 import Chat from '@backend/models/chat';
 import CloudProviderModel from '@backend/models/cloudProvider';
 import ollamaClient from '@backend/ollama/client';
+import { modelSupportsToolCalls } from '../../../../model-registry';
 
 import sharedConfig from '../../../../config';
 import { getModelContextWindow } from './modelContextWindows';
@@ -81,28 +82,34 @@ const llmRoutes: FastifyPluginAsync = async (fastify) => {
           ArchestraMcpContext.setCurrentChatId(chatId);
         }
 
-        // Get tools based on chat selection or requested tools
+        // Check if the selected model supports tool calls
+        const supportsToolCalls = modelSupportsToolCalls(model);
+
+        // Get tools based on chat selection or requested tools (only if model supports tool calls)
         let tools: McpTools = {};
 
-        if (chatId) {
-          // Get chat-specific tool selection
-          const chatSelectedTools = await Chat.getSelectedTools(chatId);
+        if (supportsToolCalls) {
+          if (chatId) {
+            // Get chat-specific tool selection
+            const chatSelectedTools = await Chat.getSelectedTools(chatId);
 
-          if (chatSelectedTools === null) {
-            // null means all tools are selected
+            if (chatSelectedTools === null) {
+              // null means all tools are selected
+              tools = toolAggregator.getAllTools();
+            } else if (chatSelectedTools.length > 0) {
+              // Use only the selected tools for this chat
+              tools = toolAggregator.getToolsById(chatSelectedTools);
+            }
+            // If chatSelectedTools is empty array, tools remains empty (no tools enabled)
+          } else if (requestedTools && requestedTools.length > 0) {
+            // Fallback to requested tools if no chatId
+            tools = toolAggregator.getToolsById(requestedTools);
+          } else {
+            // Default to all tools if no specific selection
             tools = toolAggregator.getAllTools();
-          } else if (chatSelectedTools.length > 0) {
-            // Use only the selected tools for this chat
-            tools = toolAggregator.getToolsById(chatSelectedTools);
           }
-          // If chatSelectedTools is empty array, tools remains empty (no tools enabled)
-        } else if (requestedTools && requestedTools.length > 0) {
-          // Fallback to requested tools if no chatId
-          tools = toolAggregator.getToolsById(requestedTools);
-        } else {
-          // Default to all tools if no specific selection
-          tools = toolAggregator.getAllTools();
         }
+        // If model doesn't support tool calls, tools remains empty
 
         // Create the stream with the appropriate model
         const streamConfig: Parameters<typeof streamText>[0] = {
@@ -121,8 +128,8 @@ const llmRoutes: FastifyPluginAsync = async (fastify) => {
                */
               ...(chatId || sessionId
                 ? {
-                    promptCacheKey: chatId ? `chat-${chatId}` : sessionId ? `session-${sessionId}` : undefined,
-                  }
+                  promptCacheKey: chatId ? `chat-${chatId}` : sessionId ? `session-${sessionId}` : undefined,
+                }
                 : {}),
               /**
                * maxToolCalls for the most part is handled by stopWhen, but openAI provider also has its
@@ -161,8 +168,8 @@ const llmRoutes: FastifyPluginAsync = async (fastify) => {
           },
         };
 
-        // Only add tools and toolChoice if tools are available
-        if (tools && Object.keys(tools).length > 0) {
+        // Only add tools and toolChoice if model supports tool calls and tools are available
+        if (supportsToolCalls && tools && Object.keys(tools).length > 0) {
           streamConfig.tools = tools;
           streamConfig.toolChoice = toolChoice || 'auto';
         }

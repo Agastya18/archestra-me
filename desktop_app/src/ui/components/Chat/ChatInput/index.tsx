@@ -27,6 +27,7 @@ import {
   useCloudProvidersStore,
   useDeveloperModeStore,
   useMcpServersStore,
+  useModelRegistryStore,
   useToolsStore,
   useUserSelectableModels,
 } from '@ui/stores';
@@ -83,9 +84,13 @@ export default function ChatInput({
   const { availableCloudProviderModels } = useCloudProvidersStore();
   const { availableTools, selectedToolIds, removeSelectedTool } = useToolsStore();
   const { installedMcpServers } = useMcpServersStore();
+  const { modelSupportsToolCalls } = useModelRegistryStore();
 
   // Rotating placeholder state
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
+
+  // Check if selected model supports tool calls
+  const supportsToolCalls = selectedModel ? modelSupportsToolCalls(selectedModel) : false;
 
   // Rotate placeholder every 7 seconds
   useEffect(() => {
@@ -357,7 +362,7 @@ export default function ChatInput({
                                     >
                                       {/* Status indicator */}
                                       {tool.analysis?.status === 'awaiting_ollama_model' ||
-                                      tool.analysis?.status === 'in_progress' ? (
+                                        tool.analysis?.status === 'in_progress' ? (
                                         <div className="w-2 h-2 border border-muted-foreground rounded-full animate-spin border-t-transparent flex-shrink-0" />
                                       ) : tool.analysis?.status === 'error' ? (
                                         <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0" />
@@ -403,7 +408,7 @@ export default function ChatInput({
                                     >
                                       {/* Status indicator */}
                                       {tool.analysis?.status === 'awaiting_ollama_model' ||
-                                      tool.analysis?.status === 'in_progress' ? (
+                                        tool.analysis?.status === 'in_progress' ? (
                                         <div className="w-2 h-2 border border-muted-foreground rounded-full animate-spin border-t-transparent flex-shrink-0" />
                                       ) : tool.analysis?.status === 'error' ? (
                                         <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0" />
@@ -449,7 +454,7 @@ export default function ChatInput({
                                     >
                                       {/* Status indicator */}
                                       {tool.analysis?.status === 'awaiting_ollama_model' ||
-                                      tool.analysis?.status === 'in_progress' ? (
+                                        tool.analysis?.status === 'in_progress' ? (
                                         <div className="w-2 h-2 border border-muted-foreground rounded-full animate-spin border-t-transparent flex-shrink-0" />
                                       ) : tool.analysis?.status === 'error' ? (
                                         <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0" />
@@ -495,7 +500,7 @@ export default function ChatInput({
                                     >
                                       {/* Status indicator */}
                                       {tool.analysis?.status === 'awaiting_ollama_model' ||
-                                      tool.analysis?.status === 'in_progress' ? (
+                                        tool.analysis?.status === 'in_progress' ? (
                                         <div className="w-2 h-2 border border-muted-foreground rounded-full animate-spin border-t-transparent flex-shrink-0" />
                                       ) : tool.analysis?.status === 'error' ? (
                                         <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0" />
@@ -517,6 +522,14 @@ export default function ChatInput({
                   </Tooltip>
                 );
               })}
+              {!supportsToolCalls && selectedModel && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/10 rounded-full border border-yellow-500/20 group">
+                  <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                  <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">
+                    Selected model "{selectedModel}" does not support tool calls. Tools will be disabled for this model.
+                  </span>
+                </div>
+              )}
               {selectedToolIds.size > 20 && (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 rounded-full border border-green-500/20 group">
                   <span className="text-sm font-medium text-green-600 dark:text-green-400">

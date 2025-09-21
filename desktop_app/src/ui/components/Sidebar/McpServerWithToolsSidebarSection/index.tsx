@@ -14,9 +14,9 @@ import {
   SidebarMenuItem,
 } from '@ui/components/ui/sidebar';
 import { formatToolName } from '@ui/lib/utils/tools';
-import { useMcpServersStore, useToolsStore } from '@ui/stores';
+import { useChatStore, useMcpServersStore, useModelRegistryStore, useToolsStore } from '@ui/stores';
 
-interface McpServerWithToolsSidebarSectionProps {}
+interface McpServerWithToolsSidebarSectionProps { }
 
 export default function McpServerWithToolsSidebarSection(_props: McpServerWithToolsSidebarSectionProps) {
   const navigate = useNavigate();
@@ -24,9 +24,14 @@ export default function McpServerWithToolsSidebarSection(_props: McpServerWithTo
   const { availableTools, loadingAvailableTools, selectedToolIds, addSelectedTool, removeSelectedTool } =
     useToolsStore();
   const { installedMcpServers, archestraMcpServer } = useMcpServersStore();
+  const { modelSupportsToolCalls } = useModelRegistryStore();
+  const { selectedModel } = useChatStore();
 
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set());
   const [hasInitialized, setHasInitialized] = useState(false);
+
+  // Check if selected model supports tool calls
+  const supportsToolCalls = selectedModel ? modelSupportsToolCalls(selectedModel) : false;
 
   // Helper function to extract server ID from tool ID (format: serverId__toolName)
   const extractServerIdFromToolId = (toolId: string): string => {
@@ -225,6 +230,8 @@ export default function McpServerWithToolsSidebarSection(_props: McpServerWithTo
 
   // Handle tool selection
   const handleToolToggle = (toolId: string, checked: CheckedState) => {
+    if (!supportsToolCalls) return; // Don't allow tool selection if model doesn't support tool calls
+
     if (checked) {
       addSelectedTool(toolId);
     } else {
@@ -239,6 +246,16 @@ export default function McpServerWithToolsSidebarSection(_props: McpServerWithTo
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
       <SidebarGroupLabel>Unused tools: {unusedToolsCount}</SidebarGroupLabel>
       <SidebarGroupContent>
+        {!supportsToolCalls && selectedModel && (
+          <div className="px-2 py-1.5 mb-2 bg-yellow-500/10 rounded-md border border-yellow-500/20">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-3 w-3 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+              <span className="text-xs text-yellow-600 dark:text-yellow-400">
+                Model "{selectedModel}" doesn't support tool calls
+              </span>
+            </div>
+          </div>
+        )}
         <SidebarMenu>
           {loadingAvailableTools ? (
             // Show loading state while fetching tools
@@ -335,19 +352,21 @@ export default function McpServerWithToolsSidebarSection(_props: McpServerWithTo
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (hasTools) {
+                          if (hasTools && supportsToolCalls) {
                             // Add all tools from this server
                             serverData.tools.forEach((tool) => addSelectedTool(tool.id));
                           }
                         }}
                         title={
-                          isError
-                            ? `${serverName} has an error`
-                            : !hasTools
-                              ? `${serverName} is loading tools`
-                              : `Add all ${serverName} tools`
+                          !supportsToolCalls
+                            ? 'Model does not support tool calls'
+                            : isError
+                              ? `${serverName} has an error`
+                              : !hasTools
+                                ? `${serverName} is loading tools`
+                                : `Add all ${serverName} tools`
                         }
-                        disabled={!hasTools}
+                        disabled={!hasTools || !supportsToolCalls}
                       >
                         <PlusCircle className="h-4 w-4 cursor-pointer" />
                       </button>
@@ -394,13 +413,22 @@ export default function McpServerWithToolsSidebarSection(_props: McpServerWithTo
                                 }
                               >
                                 <div
-                                  className={`flex items-center gap-2 px-2 py-1.5 text-sm rounded-md w-full ${isInitializing ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted/50 cursor-pointer'}`}
+                                  className={`flex items-center gap-2 px-2 py-1.5 text-sm rounded-md w-full ${isInitializing || !supportsToolCalls
+                                      ? 'opacity-50 cursor-not-allowed'
+                                      : 'hover:bg-muted/50 cursor-pointer'
+                                    }`}
                                   onClick={() => {
-                                    if (!isInitializing) {
+                                    if (!isInitializing && supportsToolCalls) {
                                       handleToolToggle(id, true);
                                     }
                                   }}
-                                  title={isInitializing ? `${serverName} is still initializing` : fullName}
+                                  title={
+                                    !supportsToolCalls
+                                      ? 'Model does not support tool calls'
+                                      : isInitializing
+                                        ? `${serverName} is still initializing`
+                                        : fullName
+                                  }
                                 >
                                   {status === 'awaiting_ollama_model' || status === 'in_progress' ? (
                                     <div className="w-2 h-2 border border-muted-foreground rounded-full animate-spin border-t-transparent flex-shrink-0" />
@@ -410,15 +438,14 @@ export default function McpServerWithToolsSidebarSection(_props: McpServerWithTo
                                     <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0" />
                                   ) : (
                                     <div
-                                      className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                                        tool.analysis?.is_read && tool.analysis?.is_write
+                                      className={`w-2 h-2 rounded-full flex-shrink-0 ${tool.analysis?.is_read && tool.analysis?.is_write
                                           ? 'bg-blue-500'
                                           : tool.analysis?.is_write
                                             ? 'bg-orange-500'
                                             : tool.analysis?.is_read
                                               ? 'bg-green-500'
                                               : 'bg-gray-500'
-                                      }`}
+                                        }`}
                                     />
                                   )}
                                   <span className="truncate flex-1">{displayName}</span>

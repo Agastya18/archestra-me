@@ -6,14 +6,16 @@ export { useExternalMcpClientsStore } from './external-mcp-clients-store';
 export { useMcpLogsStore } from './mcp-logs-store';
 export { useMcpServersStore } from './mcp-servers-store';
 export { useMemoryStore } from './memory-store';
+export { useModelRegistryStore } from './model-registry-store';
 export {
   useAllAvailableModelLabels,
   useAvailableModels,
   useOllamaStore,
-  useUserSelectableModels,
+  useUserSelectableModels
 } from './ollama-store';
 export { useSandboxStore } from './sandbox-store';
 export { useSecurityTestStore } from './security-test-store';
 export { useThemeStore } from './theme-store';
 export { useToolsStore } from './tools-store';
 export { useUserStore } from './user-store';
+
